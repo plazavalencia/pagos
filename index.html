@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Libro de Cuotas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg: #EEEEE7;
+    --paper: #F8F7F2;
+    --ink: #1C2B24;
+    --ink-soft: #4B5850;
+    --pine: #2F5D4F;
+    --pine-dim: #C7D6CE;
+    --gold: #A8792A;
+    --gold-bg: #F1E4C9;
+    --brick: #A6432D;
+    --brick-bg: #F3DCD4;
+    --line: #D8D6CB;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:'IBM Plex Sans', sans-serif;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:760px;margin:0 auto;padding:20px 16px 60px;}
+  h1,h2,h3{font-family:'Fraunces', serif;font-weight:500;margin:0;}
+  .num, .mono{font-family:'IBM Plex Mono', monospace;}
+
+  header.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+  header.top h1{font-size:22px;color:var(--pine);}
+  header.top .sub{font-size:13px;color:var(--ink-soft);}
+  .logout{background:none;border:1px solid var(--line);border-radius:4px;padding:6px 10px;font-size:12px;color:var(--ink-soft);cursor:pointer;}
+
+  .month-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .month-row button{background:none;border:1px solid var(--line);border-radius:4px;width:30px;height:30px;font-size:15px;cursor:pointer;color:var(--pine);}
+  .month-label{font-family:'Fraunces', serif;font-size:18px;text-transform:capitalize;}
+
+  .hero{background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:22px 20px;margin:14px 0 20px;}
+  .hero .amount{font-size:40px;font-weight:500;color:var(--pine);line-height:1;}
+  .hero .amount-label{font-size:13px;color:var(--ink-soft);margin-top:6px;}
+  .hero .split{display:flex;gap:22px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);flex-wrap:wrap;}
+  .hero .split div{font-size:13px;color:var(--ink-soft);}
+  .hero .split span{display:block;font-size:17px;color:var(--ink);margin-top:2px;}
+
+  .banner{display:flex;align-items:center;gap:10px;padding:12px 14px;border-radius:6px;margin-bottom:18px;font-size:14px;}
+  .banner.due{background:var(--gold-bg);color:#6b4d17;}
+  .banner.overdue{background:var(--brick-bg);color:#7a301f;}
+  .banner.error{background:var(--brick-bg);color:#7a301f;}
+  .banner button{margin-left:auto;background:none;border:1px solid currentColor;border-radius:4px;padding:5px 10px;font-size:12px;cursor:pointer;color:inherit;font-family:inherit;}
+
+  nav.tabs{display:flex;gap:18px;border-bottom:1px solid var(--line);margin-bottom:20px;overflow-x:auto;}
+  nav.tabs button{background:none;border:none;padding:8px 2px 10px;font-size:14px;color:var(--ink-soft);cursor:pointer;font-family:'IBM Plex Sans',sans-serif;white-space:nowrap;border-bottom:2px solid transparent;}
+  nav.tabs button.active{color:var(--pine);border-bottom-color:var(--pine);font-weight:500;}
+
+  section.panel{display:none;}
+  section.panel.active{display:block;}
+
+  .row{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);gap:10px;}
+  .row:last-child{border-bottom:none;}
+  .row .name{font-size:14px;}
+  .row .sector{font-size:12px;color:var(--ink-soft);}
+  .status{font-size:11px;padding:2px 8px;border-radius:20px;}
+  .status.pagado{background:var(--pine-dim);color:var(--pine);}
+  .status.parcial{background:var(--gold-bg);color:#6b4d17;}
+  .status.pendiente{background:var(--brick-bg);color:#7a301f;}
+
+  form{display:flex;flex-direction:column;gap:12px;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:16px;margin-bottom:20px;}
+  label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;gap:5px;}
+  input,select{font-family:'IBM Plex Sans',sans-serif;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:4px;background:#fff;color:var(--ink);}
+  input.mono{font-family:'IBM Plex Mono',monospace;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  button.primary{background:var(--pine);color:#fff;border:none;border-radius:4px;padding:11px;font-size:14px;font-family:'IBM Plex Sans',sans-serif;cursor:pointer;margin-top:4px;}
+  button.primary:disabled{opacity:0.5;cursor:default;}
+  button.secondary{background:none;color:var(--pine);border:1px solid var(--pine);border-radius:4px;padding:9px 14px;font-size:13px;cursor:pointer;font-family:'IBM Plex Sans',sans-serif;}
+  button.ghost{background:none;border:none;color:var(--ink-soft);font-size:12px;cursor:pointer;text-decoration:underline;}
+  h3.section-title{font-size:14px;color:var(--pine);margin-bottom:8px;}
+
+  .pago-item{padding:10px 0;border-bottom:1px solid var(--line);font-size:13px;display:flex;justify-content:space-between;gap:8px;}
+  .pago-item .meta{color:var(--ink-soft);font-size:11px;}
+  .empty{color:var(--ink-soft);font-size:13px;padding:16px 0;text-align:center;}
+
+  .concept-hint{font-size:11px;color:var(--gold);margin-top:-4px;}
+  footer.actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;}
+
+  .plates{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .plate-tag{font-family:'IBM Plex Mono',monospace;font-size:11px;background:var(--pine-dim);color:var(--pine);padding:3px 8px;border-radius:4px;display:flex;align-items:center;gap:6px;}
+  .plate-tag button{background:none;border:none;color:var(--pine);cursor:pointer;font-size:12px;padding:0;line-height:1;}
+  .plate-add{display:flex;gap:6px;margin-top:8px;}
+  .plate-add input{flex:1;font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 8px;border:1px solid var(--line);border-radius:4px;text-transform:uppercase;}
+  .plate-add button{background:none;border:1px solid var(--pine);color:var(--pine);border-radius:4px;padding:6px 10px;font-size:12px;cursor:pointer;}
+
+  .login-wrap{max-width:340px;margin:80px auto;text-align:center;}
+  .login-wrap h1{font-size:22px;color:var(--pine);margin-bottom:6px;}
+  .login-wrap .sub{font-size:13px;color:var(--ink-soft);margin-bottom:24px;}
+  .login-error{font-size:13px;color:var(--brick);min-height:18px;}
+  .loading-msg{text-align:center;color:var(--ink-soft);font-size:13px;padding:40px 0;}
+</style>
+</head>
+<body>
+
+<div id="loginScreen" class="wrap" style="display:none;">
+  <div class="login-wrap">
+    <h1>Libro de Cuotas</h1>
+    <div class="sub">Junta de Vecinos · Comité de Seguridad</div>
+    <form id="loginForm">
+      <label>Correo<input type="email" id="loginEmail" required></label>
+      <label>Contraseña<input type="password" id="loginPassword" required></label>
+      <button type="submit" class="primary">Entrar</button>
+      <div class="login-error" id="loginError"></div>
+    </form>
+  </div>
+</div>
+
+<div id="loadingScreen" class="wrap"><div class="loading-msg">Cargando…</div></div>
+
+<div id="appScreen" class="wrap" style="display:none;">
+
+  <header class="top">
+    <div>
+      <h1>Libro de Cuotas</h1>
+      <div class="sub">Junta de Vecinos · Comité de Seguridad</div>
+    </div>
+    <button class="logout" id="logoutBtn">Cerrar sesión</button>
+  </header>
+
+  <div id="banner-slot"></div>
+
+  <div class="month-row">
+    <button id="prevMonth">‹</button>
+    <div class="month-label" id="monthLabel"></div>
+    <button id="nextMonth">›</button>
+  </div>
+  <div class="sub" style="margin:-2px 0 4px 2px;" id="monthRange"></div>
+
+  <div class="hero" id="hero"></div>
+
+  <h3 class="section-title">Pagos de este mes</h3>
+  <div id="checkpoints" style="margin-bottom:20px;"></div>
+
+  <nav class="tabs">
+    <button data-tab="resumen" class="active">Detalle</button>
+    <button data-tab="registrar">Registrar pago</button>
+    <button data-tab="transferencias">Transferencias</button>
+    <button data-tab="vecinos">Vecinos</button>
+    <button data-tab="exportar">Exportar</button>
+    <button data-tab="config">Recordatorio</button>
+  </nav>
+
+  <section class="panel active" id="panel-resumen">
+    <h3 class="section-title">Estado de los vecinos este mes</h3>
+    <div id="resumenList"></div>
+  </section>
+
+  <section class="panel" id="panel-registrar">
+    <form id="pagoForm">
+      <label>Vecino<select id="pagoVecino" required></select></label>
+      <label>Fecha<input type="date" id="pagoFecha" required></label>
+      <label>Concepto
+        <select id="pagoConcepto" required>
+          <option value="cuota_social">Cuota social</option>
+          <option value="seguridad">Seguridad</option>
+          <option value="ambos">Ambos (cuota social + seguridad)</option>
+          <option value="otro">Otro / monto distinto</option>
+        </select>
+      </label>
+      <div class="concept-hint" id="conceptHint"></div>
+      <label id="pagoMontoWrap" style="display:none;">Monto<input type="number" class="mono" id="pagoMonto" min="0" step="1"></label>
+      <label>Cómo llegó el pago
+        <select id="pagoMetodo">
+          <option value="correo_banco">Correo del banco</option>
+          <option value="whatsapp">WhatsApp del vecino</option>
+          <option value="app_banco">Movimiento en app del banco</option>
+        </select>
+      </label>
+      <label>Nota (opcional)<input type="text" id="pagoNota" placeholder="Ej: transferencia desde cuenta de su hijo"></label>
+      <button type="submit" class="primary">Registrar pago</button>
+    </form>
+    <h3 class="section-title">Pagos de este mes</h3>
+    <div id="pagosList"></div>
+  </section>
+
+  <section class="panel" id="panel-transferencias">
+    <form id="transferenciaForm">
+      <label>Destino
+        <select id="transTipo" required>
+          <option value="cuota_social">JJVV — Cuota social</option>
+          <option value="seguridad">Comité de Seguridad</option>
+        </select>
+      </label>
+      <div class="grid2">
+        <label>Monto<input type="number" class="mono" id="transMonto" min="0" step="1" required></label>
+        <label>Fecha de transferencia<input type="date" id="transFecha" required></label>
+      </div>
+      <button type="submit" class="primary">Registrar transferencia</button>
+    </form>
+
+    <h3 class="section-title">Balance de este mes</h3>
+    <div id="balanceTransferencias" style="margin-bottom:20px;"></div>
+
+    <h3 class="section-title" style="display:flex;justify-content:space-between;align-items:baseline;">
+      <span id="transListTitle">Transferencias de este mes</span>
+      <button class="ghost" id="toggleHistorial" style="margin:0;">ver historial completo</button>
+    </h3>
+    <div id="transferenciasList"></div>
+  </section>
+
+  <section class="panel" id="panel-vecinos">
+    <form id="vecinoForm">
+      <label>Nombre<input type="text" id="vNombre" required></label>
+      <div class="grid2">
+        <label>Sector / dirección<input type="text" id="vSector"></label>
+        <label></label>
+      </div>
+      <div class="grid2">
+        <label>Cuota social mensual<input type="number" class="mono" id="vCuotaSocial" min="0" step="1"></label>
+        <label>Seguridad mensual<input type="number" class="mono" id="vSeguridad" min="0" step="1"></label>
+      </div>
+      <button type="submit" class="primary">Agregar vecino</button>
+    </form>
+    <h3 class="section-title">Vecinos registrados</h3>
+    <div id="vecinosList"></div>
+  </section>
+
+  <section class="panel" id="panel-exportar">
+    <p style="font-size:14px;color:var(--ink-soft);">Genera el Excel del mes seleccionado, con el mismo formato que envías a la JJVV (Plaza, CDS, JJVV, fila de totales).</p>
+    <footer class="actions"><button class="primary" id="exportBtn">Descargar Excel del mes</button></footer>
+    <h3 class="section-title" style="margin-top:24px;">Vista previa</h3>
+    <div id="exportPreview"></div>
+  </section>
+
+  <section class="panel" id="panel-config">
+    <form id="configForm">
+      <label>Días del mes en que se envía la planilla (separados por coma)
+        <input type="text" id="diasCorte" placeholder="5,10,20" required>
+      </label>
+      <button type="submit" class="primary">Guardar</button>
+    </form>
+    <button class="ghost" id="marcarEnviado" style="margin-top:10px;">Marcar este corte como enviado</button>
+  </section>
+
+</div>
+
+<script>
+// ---- Montos por defecto (edita aquí si cambian los valores de cuota) ----
+const DEFAULT_CUOTA_SOCIAL = 1000;
+const DEFAULT_SEGURIDAD = 25000;
+const PLAZA_NOMBRE = 'Valencia'; // nombre del condominio/sector para la columna "Plaza" del Excel
+
+// ---- Configuración de conexión a Supabase ----
+const SUPABASE_URL = 'https://ldcfrilegzovvijtjhcn.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_hA1pfjmS6mly51SYC-MScQ_VJLzuefp';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let vecinos = [];
+let vehiculos = [];
+let pagos = [];
+let transferencias = [];
+let config = { diasCorte: [5,10,20] };
+let enviados = {};
+
+const fmtMoney = (n) => '$' + Math.round(n).toLocaleString('es-CL');
+const corteKey = (d) => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+const fmtCorte = (d) => 'Corte al ' + d.toLocaleDateString('es-CL', { day:'2-digit', month:'short', year:'numeric' });
+
+function sortedDiasCorte(){ return (config.diasCorte||[5,10,20]).slice().sort((a,b)=>a-b); }
+
+// Dado cualquier fecha, devuelve la fecha del próximo corte que le corresponde
+function corteForDate(d){
+  const dias = sortedDiasCorte();
+  const day = d.getDate();
+  for(const dc of dias){ if(day<=dc) return new Date(d.getFullYear(), d.getMonth(), dc); }
+  let y=d.getFullYear(), m=d.getMonth()+1;
+  if(m>11){ m=0; y+=1; }
+  return new Date(y, m, dias[0]);
+}
+function nextCorteDate(d){
+  const dias = sortedDiasCorte();
+  const idx = dias.indexOf(d.getDate());
+  if(idx>=0 && idx<dias.length-1) return new Date(d.getFullYear(), d.getMonth(), dias[idx+1]);
+  let y=d.getFullYear(), m=d.getMonth()+1;
+  if(m>11){ m=0; y+=1; }
+  return new Date(y, m, dias[0]);
+}
+function prevCorteDate(d){
+  const dias = sortedDiasCorte();
+  const idx = dias.indexOf(d.getDate());
+  if(idx>0) return new Date(d.getFullYear(), d.getMonth(), dias[idx-1]);
+  let y=d.getFullYear(), m=d.getMonth()-1;
+  if(m<0){ m=11; y-=1; }
+  return new Date(y, m, dias[dias.length-1]);
+}
+function periodStart(corteDate){
+  const prev = prevCorteDate(corteDate);
+  const s = new Date(prev);
+  s.setDate(prev.getDate()+1);
+  return s;
+}
+
+// --- Mes contable: todo lo recaudado del 21 del mes anterior al 20 de "mesY" pertenece a mesY ---
+function mesKey(mesY){ return mesY.getFullYear() + '-' + String(mesY.getMonth()+1).padStart(2,'0'); }
+function mesPeriodStart(mesY){ return new Date(mesY.getFullYear(), mesY.getMonth()-1, 21); }
+function mesPeriodEnd(mesY){ return new Date(mesY.getFullYear(), mesY.getMonth(), 20); }
+function fmtMesLabel(mesY){ return mesY.toLocaleDateString('es-CL', { month:'long', year:'numeric' }); }
+function fmtRangoMes(mesY){
+  const s = mesPeriodStart(mesY), e = mesPeriodEnd(mesY);
+  return `Del ${s.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})} al ${e.toLocaleDateString('es-CL',{day:'2-digit',month:'short'})}`;
+}
+function mesYForDate(d){
+  if(d.getDate()<=20) return new Date(d.getFullYear(), d.getMonth(), 1);
+  let y=d.getFullYear(), m=d.getMonth()+1;
+  if(m>11){ m=0; y+=1; }
+  return new Date(y, m, 1);
+}
+// Los 3 checkpoints de envío que caen dentro de "mesY", con el sub-tramo que cada uno cierra
+function checkpointsForMes(mesY){
+  const dias = sortedDiasCorte();
+  let prevEnd = mesPeriodStart(mesY);
+  const list = [];
+  dias.forEach(dc=>{
+    const end = new Date(mesY.getFullYear(), mesY.getMonth(), dc);
+    const start = new Date(prevEnd);
+    list.push({ date: end, start, end });
+    const next = new Date(end); next.setDate(end.getDate()+1);
+    prevEnd = next;
+  });
+  return list;
+}
+
+let currentDate = mesYForDate(new Date());
+
+function showScreen(name){
+  document.getElementById('loginScreen').style.display = name==='login' ? 'block':'none';
+  document.getElementById('loadingScreen').style.display = name==='loading' ? 'block':'none';
+  document.getElementById('appScreen').style.display = name==='app' ? 'block':'none';
+}
+
+async function boot(){
+  showScreen('loading');
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){ await loadAll(); showScreen('app'); }
+  else { showScreen('login'); }
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const email = document.getElementById('loginEmail').value;
+  const password = document.getElementById('loginPassword').value;
+  document.getElementById('loginError').textContent = '';
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  if(error){ document.getElementById('loginError').textContent = 'No se pudo iniciar sesión: ' + error.message; return; }
+  showScreen('loading');
+  await loadAll();
+  showScreen('app');
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+  showScreen('login');
+});
+
+async function loadAll(){
+  try{
+    const [{data:v, error:ev}, {data:veh, error:eveh}, {data:p, error:ep}, {data:c, error:ec}, {data:e, error:ee}, {data:t, error:et}] = await Promise.all([
+      sb.from('vecinos').select('*').order('nombre'),
+      sb.from('vehiculos').select('*'),
+      sb.from('pagos').select('*'),
+      sb.from('config').select('*').eq('id',1).single(),
+      sb.from('envios').select('*'),
+      sb.from('transferencias').select('*')
+    ]);
+    if(ev||eveh||ep||ec||et) throw (ev||eveh||ep||ec||et);
+    vecinos = (v||[]).map(r=>({id:r.id, nombre:r.nombre, sector:r.sector, cuotaSocial:Number(r.cuota_social), seguridad:Number(r.seguridad)}));
+    vehiculos = (veh||[]).map(r=>({id:r.id, vecinoId:r.vecino_id, patente:r.patente}));
+    pagos = (p||[]).map(r=>({id:r.id, vecinoId:r.vecino_id, fecha:r.fecha, monto:Number(r.monto), concepto:r.concepto, metodo:r.metodo, nota:r.nota}));
+    transferencias = (t||[]).map(r=>({id:r.id, tipo:r.tipo, monto:Number(r.monto), fecha:r.fecha}));
+    config = c && c.dias_corte ? { diasCorte: c.dias_corte } : { diasCorte: [5,10,20] };
+    enviados = {}; (e||[]).forEach(r=>{ enviados[r.mes] = r.enviado; });
+  }catch(err){
+    console.error('Error cargando datos', err);
+    document.getElementById('banner-slot').innerHTML = `<div class="banner error">No se pudieron cargar los datos: ${err.message||err}</div>`;
+  }
+  render();
+}
+
+function pagosDelMes(mesY){
+  const start = corteKey(mesPeriodStart(mesY));
+  const end = corteKey(mesPeriodEnd(mesY));
+  return pagos.filter(p => p.fecha >= start && p.fecha <= end);
+}
+function totalesVecino(vecinoId, d){ const lista = pagosDelMes(d).filter(p => p.vecinoId === vecinoId); const total = lista.reduce((s,p) => s + Number(p.monto), 0); return { total, lista }; }
+function patentesDe(vecinoId){ return vehiculos.filter(v=>v.vecinoId===vecinoId); }
+
+// El mes de una transferencia es simplemente el mes calendario de su fecha
+// (no el período 21-20 usado para los pagos de vecinos)
+function transferenciasDelMes(mesY){
+  const key = mesKey(mesY);
+  return transferencias.filter(t => t.fecha.slice(0,7) === key);
+}
+
+let mostrarHistorialCompleto = false;
+const tipoLabel = { cuota_social: 'JJVV — Cuota social', seguridad: 'Comité de Seguridad' };
+
+function renderTransferencias(){
+  const lista = transferenciasDelMes(currentDate).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  const totalCuota = lista.filter(t=>t.tipo==='cuota_social').reduce((s,t)=>s+t.monto,0);
+  const totalSeg = lista.filter(t=>t.tipo==='seguridad').reduce((s,t)=>s+t.monto,0);
+
+  const recaudado = pagosDelMes(currentDate);
+  const { cuota: recCuota, seg: recSeg } = desgloseConceptos(recaudado);
+
+  const balEl = document.getElementById('balanceTransferencias');
+  const pendCuota = recCuota - totalCuota;
+  const pendSeg = recSeg - totalSeg;
+  balEl.innerHTML = `
+    <div class="row">
+      <div><div class="name">JJVV — Cuota social</div><div class="sector">Recaudado ${fmtMoney(recCuota)} · Transferido ${fmtMoney(totalCuota)}</div></div>
+      <span class="status ${pendCuota<=0?'pagado':'pendiente'}">${pendCuota<=0?'Al día':'Faltan '+fmtMoney(pendCuota)}</span>
+    </div>
+    <div class="row">
+      <div><div class="name">Comité de Seguridad</div><div class="sector">Recaudado ${fmtMoney(recSeg)} · Transferido ${fmtMoney(totalSeg)}</div></div>
+      <span class="status ${pendSeg<=0?'pagado':'pendiente'}">${pendSeg<=0?'Al día':'Faltan '+fmtMoney(pendSeg)}</span>
+    </div>`;
+
+  document.getElementById('transListTitle').textContent = mostrarHistorialCompleto ? 'Historial completo' : 'Transferencias de este mes';
+  document.getElementById('toggleHistorial').textContent = mostrarHistorialCompleto ? 'ver solo este mes' : 'ver historial completo';
+
+  const listEl = document.getElementById('transferenciasList');
+  if(mostrarHistorialCompleto){
+    renderHistorialCompleto(listEl);
+  } else if(lista.length===0){
+    listEl.innerHTML = '<div class="empty">Sin transferencias registradas este mes.</div>';
+  } else {
+    listEl.innerHTML = lista.map(t=>transferenciaItemHTML(t)).join('');
+  }
+}
+
+function transferenciaItemHTML(t){
+  return `<div class="pago-item">
+    <div><div>${tipoLabel[t.tipo]} <span class="mono">${fmtMoney(t.monto)}</span></div>
+    <div class="meta">${t.fecha}</div></div>
+    <button class="ghost" onclick="borrarTransferencia('${t.id}')">borrar</button>
+  </div>`;
+}
+
+function renderHistorialCompleto(listEl){
+  if(transferencias.length===0){ listEl.innerHTML = '<div class="empty">Aún no registras transferencias.</div>'; return; }
+  const porMes = {};
+  transferencias.forEach(t=>{
+    const key = t.fecha.slice(0,7);
+    if(!porMes[key]) porMes[key] = [];
+    porMes[key].push(t);
+  });
+  const meses = Object.keys(porMes).sort().reverse();
+  listEl.innerHTML = meses.map(key=>{
+    const [y,m] = key.split('-').map(Number);
+    const label = new Date(y, m-1, 1).toLocaleDateString('es-CL', { month:'long', year:'numeric' });
+    const items = porMes[key].slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+    const totalMes = items.reduce((s,t)=>s+t.monto,0);
+    return `<div style="margin-bottom:14px;">
+      <div class="row" style="border-bottom:1px solid var(--pine-dim);">
+        <div class="name" style="text-transform:capitalize;">${label}</div>
+        <div class="num" style="font-size:13px;">${fmtMoney(totalMes)}</div>
+      </div>
+      ${items.map(t=>transferenciaItemHTML(t)).join('')}
+    </div>`;
+  }).join('');
+}
+
+document.getElementById('toggleHistorial').addEventListener('click', ()=>{
+  mostrarHistorialCompleto = !mostrarHistorialCompleto;
+  renderTransferencias();
+});
+
+async function borrarTransferencia(id){
+  try{ await sb.from('transferencias').delete().eq('id', id); transferencias = transferencias.filter(t=>t.id!==id); render(); }
+  catch(e){ alert('No se pudo borrar la transferencia: ' + e.message); }
+}
+
+function render(){
+  renderMonthLabel(); renderHero(); renderCheckpoints(); renderBanner(); renderResumen();
+  renderVecinoSelect(); renderPagos(); renderVecinos(); renderExportPreview(); renderTransferencias();
+  document.getElementById('diasCorte').value = sortedDiasCorte().join(',');
+}
+
+function renderMonthLabel(){
+  document.getElementById('monthLabel').textContent = fmtMesLabel(currentDate);
+  document.getElementById('monthRange').textContent = fmtRangoMes(currentDate);
+}
+
+// Reparte una lista de pagos en cuota social / seguridad, prorrateando los pagos "ambos"
+function desgloseConceptos(lista){
+  let cuota = 0, seg = 0;
+  lista.forEach(p=>{
+    if(p.concepto === 'cuota_social') cuota += Number(p.monto);
+    else if(p.concepto === 'seguridad') seg += Number(p.monto);
+    else if(p.concepto === 'ambos'){
+      const vec = vecinos.find(v=>v.id===p.vecinoId);
+      if(vec && (vec.cuotaSocial+vec.seguridad) > 0){
+        cuota += Number(p.monto) * (vec.cuotaSocial/(vec.cuotaSocial+vec.seguridad));
+        seg += Number(p.monto) * (vec.seguridad/(vec.cuotaSocial+vec.seguridad));
+      }
+    }
+    // 'otro' no se puede prorratear con certeza, no se suma al desglose
+  });
+  return { cuota, seg };
+}
+
+function renderCheckpoints(){
+  const el = document.getElementById('checkpoints');
+  const cps = checkpointsForMes(currentDate);
+  el.innerHTML = cps.map(cp=>{
+    const startKey = corteKey(cp.start), endKey = corteKey(cp.end);
+    const lista = pagos.filter(p=>p.fecha>=startKey && p.fecha<=endKey);
+    const subtotal = lista.reduce((s,p)=>s+Number(p.monto),0);
+    const { cuota, seg } = desgloseConceptos(lista);
+    const key = corteKey(cp.date);
+    const sent = !!enviados[key];
+    const label = cp.date.toLocaleDateString('es-CL',{day:'2-digit',month:'short'});
+    return `<div class="row">
+      <div><div class="name">Corte ${label}</div>
+        <div class="sector">${fmtMoney(subtotal)} · Cuota social ${fmtMoney(cuota)} · Seguridad ${fmtMoney(seg)}</div></div>
+      <span class="status ${sent?'pagado':'pendiente'}" style="cursor:pointer;" onclick="toggleEnviado('${key}')">${sent?'Enviado':'Pendiente'}</span>
+    </div>`;
+  }).join('');
+}
+
+async function toggleEnviado(key){
+  const nuevo = !enviados[key];
+  enviados[key] = nuevo;
+  try{ await sb.from('envios').upsert({ mes: key, enviado: nuevo }); }catch(e){ console.error(e); }
+  renderCheckpoints();
+  renderBanner();
+}
+
+function renderHero(){
+  const lista = pagosDelMes(currentDate);
+  const total = lista.reduce((s,p)=>s+Number(p.monto),0);
+  const { cuota, seg } = desgloseConceptos(lista);
+  document.getElementById('hero').innerHTML = `
+    <div class="amount num">${fmtMoney(total)}</div>
+    <div class="amount-label">recaudado este mes</div>
+    <div class="split">
+      <div>Cuota social<span class="num">${fmtMoney(cuota)}</span></div>
+      <div>Seguridad<span class="num">${fmtMoney(seg)}</span></div>
+      <div>Vecinos al día<span class="num">${vecinosAlDia()}/${vecinos.length}</span></div>
+    </div>`;
+}
+
+function vecinosAlDia(){
+  return vecinos.filter(v => {
+    const esperado = v.cuotaSocial + v.seguridad;
+    const {total} = totalesVecino(v.id, currentDate);
+    return esperado > 0 ? total >= esperado : total > 0;
+  }).length;
+}
+
+function proximoCorte(){
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  return corteForDate(today);
+}
+
+function renderBanner(){
+  const slot = document.getElementById('banner-slot');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = proximoCorte();
+  const key = corteKey(target);
+  const diffMs = target - today;
+  const diff = Math.round(diffMs / 86400000);
+  const label = target.toLocaleDateString('es-CL', { day:'2-digit', month:'short' });
+  if(enviados[key]){
+    const siguiente = nextCorteDate(target);
+    const labelSiguiente = siguiente.toLocaleDateString('es-CL', { day:'2-digit', month:'short' });
+    slot.innerHTML = `<div class="banner due">Corte del ${label} ya enviado. Próximo corte: ${labelSiguiente}.</div>`;
+    return;
+  }
+  if(diff < 0){
+    slot.innerHTML = `<div class="banner overdue">El corte del ${label} ya venció. Envía la planilla y transfiere lo recaudado.<button onclick="marcarEnviadoRapido()">Marcar enviado</button></div>`;
+  } else if(diff <= 3){
+    const texto = diff===0 ? 'Hoy vence' : `Quedan ${diff} día(s) para`;
+    slot.innerHTML = `<div class="banner due">${texto} el corte del ${label}: envía la planilla y transfiere lo recaudado.<button onclick="marcarEnviadoRapido()">Marcar enviado</button></div>`;
+  } else { slot.innerHTML = ''; }
+}
+
+async function marcarEnviadoRapido(){
+  const key = corteKey(proximoCorte());
+  enviados[key] = true;
+  try{ await sb.from('envios').upsert({ mes: key, enviado: true }); }catch(e){ console.error(e); }
+  renderBanner();
+}
+
+function renderResumen(){
+  const el = document.getElementById('resumenList');
+  if(vecinos.length===0){ el.innerHTML = '<div class="empty">Agrega vecinos en la pestaña "Vecinos" para verlos aquí.</div>'; return; }
+  el.innerHTML = vecinos.map(v=>{
+    const esperado = v.cuotaSocial + v.seguridad;
+    const {total} = totalesVecino(v.id, currentDate);
+    let statusClass='pendiente', statusText='Pendiente';
+    if(esperado>0 && total>=esperado){ statusClass='pagado'; statusText='Pagado'; }
+    else if(total>0){ statusClass='parcial'; statusText='Parcial'; }
+    else if(esperado===0 && total>0){ statusClass='pagado'; statusText='Pagado'; }
+    return `<div class="row">
+      <div><div class="name">${v.nombre}</div><div class="sector">${v.sector||''}</div></div>
+      <div style="text-align:right;">
+        <div class="num" style="font-size:13px;">${fmtMoney(total)} / ${fmtMoney(esperado)}</div>
+        <span class="status ${statusClass}">${statusText}</span>
+      </div></div>`;
+  }).join('');
+}
+
+function renderVecinoSelect(){
+  const sel = document.getElementById('pagoVecino');
+  const prev = sel.value;
+  sel.innerHTML = vecinos.map(v=>`<option value="${v.id}">${v.nombre}</option>`).join('');
+  if(prev) sel.value = prev;
+  document.getElementById('pagoFecha').value = new Date().toISOString().slice(0,10);
+  const vCuota = document.getElementById('vCuotaSocial');
+  const vSeg = document.getElementById('vSeguridad');
+  if(vCuota.value==='') vCuota.value = DEFAULT_CUOTA_SOCIAL;
+  if(vSeg.value==='') vSeg.value = DEFAULT_SEGURIDAD;
+  updateConceptHint();
+}
+
+function montoCalculado(v, concepto){
+  if(!v) return 0;
+  if(concepto==='cuota_social') return v.cuotaSocial;
+  if(concepto==='seguridad') return v.seguridad;
+  if(concepto==='ambos') return v.cuotaSocial + v.seguridad;
+  return null; // 'otro' — se ingresa a mano
+}
+
+function updateConceptHint(){
+  const vid = document.getElementById('pagoVecino').value;
+  const v = vecinos.find(x=>x.id===vid);
+  const concepto = document.getElementById('pagoConcepto').value;
+  const hint = document.getElementById('conceptHint');
+  const montoWrap = document.getElementById('pagoMontoWrap');
+  const montoInput = document.getElementById('pagoMonto');
+  if(!v){ hint.textContent=''; return; }
+  const calculado = montoCalculado(v, concepto);
+  if(concepto==='otro'){
+    montoWrap.style.display = 'flex';
+    hint.textContent = `Cuota social: ${fmtMoney(v.cuotaSocial)} · Seguridad: ${fmtMoney(v.seguridad)}`;
+  } else {
+    montoWrap.style.display = 'none';
+    montoInput.value = calculado;
+    hint.textContent = `Se registrará ${fmtMoney(calculado)}`;
+  }
+}
+
+function renderPagos(){
+  const el = document.getElementById('pagosList');
+  const lista = pagosDelMes(currentDate).slice().sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  if(lista.length===0){ el.innerHTML='<div class="empty">Sin pagos registrados este mes.</div>'; return; }
+  const conceptoLabel = {cuota_social:'Cuota social', seguridad:'Seguridad', ambos:'Ambos', otro:'Otro'};
+  const metodoLabel = {correo_banco:'Correo banco', whatsapp:'WhatsApp', app_banco:'App banco'};
+  el.innerHTML = lista.map(p=>{
+    const v = vecinos.find(x=>x.id===p.vecinoId);
+    return `<div class="pago-item">
+      <div><div>${v?v.nombre:'—'} <span class="mono">${fmtMoney(p.monto)}</span></div>
+      <div class="meta">${conceptoLabel[p.concepto]||p.concepto} · ${metodoLabel[p.metodo]||''} · ${p.fecha}${p.nota?' · '+p.nota:''}</div></div>
+      <button class="ghost" onclick="borrarPago('${p.id}')">borrar</button></div>`;
+  }).join('');
+}
+
+async function borrarPago(id){
+  try{ await sb.from('pagos').delete().eq('id', id); pagos = pagos.filter(p=>p.id!==id); render(); }
+  catch(e){ alert('No se pudo borrar el pago: ' + e.message); }
+}
+
+function renderVecinos(){
+  const el = document.getElementById('vecinosList');
+  if(vecinos.length===0){ el.innerHTML='<div class="empty">Aún no agregas vecinos.</div>'; return; }
+  el.innerHTML = vecinos.map(v=>{
+    const patentes = patentesDe(v.id);
+    return `<div class="row" style="flex-direction:column;align-items:stretch;">
+      <div style="display:flex;justify-content:space-between;">
+        <div><div class="name">${v.nombre}</div><div class="sector">${v.sector||''} · Cuota social ${fmtMoney(v.cuotaSocial)} · Seguridad ${fmtMoney(v.seguridad)}</div></div>
+        <button class="ghost" onclick="borrarVecino('${v.id}')">borrar vecino</button>
+      </div>
+      <div class="plates">
+        ${patentes.map(p=>`<span class="plate-tag">${p.patente}<button onclick="borrarPatente('${p.id}')">×</button></span>`).join('')}
+      </div>
+      <div class="plate-add">
+        <input type="text" placeholder="Agregar patente" id="plate-input-${v.id}">
+        <button onclick="agregarPatente('${v.id}')">Agregar</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function agregarPatente(vecinoId){
+  const input = document.getElementById('plate-input-'+vecinoId);
+  const patente = input.value.trim().toUpperCase();
+  if(!patente) return;
+  try{
+    const { data, error } = await sb.from('vehiculos').insert({ vecino_id: vecinoId, patente }).select().single();
+    if(error) throw error;
+    vehiculos.push({ id: data.id, vecinoId: data.vecino_id, patente: data.patente });
+    input.value = '';
+    render();
+  }catch(e){ alert('No se pudo agregar la patente: ' + e.message); }
+}
+
+async function borrarPatente(id){
+  try{ await sb.from('vehiculos').delete().eq('id', id); vehiculos = vehiculos.filter(v=>v.id!==id); render(); }
+  catch(e){ alert('No se pudo borrar la patente: ' + e.message); }
+}
+
+async function borrarVecino(id){
+  if(!confirm('Esto también borrará sus pagos y patentes registradas. ¿Continuar?')) return;
+  try{
+    await sb.from('vecinos').delete().eq('id', id);
+    vecinos = vecinos.filter(v=>v.id!==id);
+    vehiculos = vehiculos.filter(v=>v.vecinoId!==id);
+    pagos = pagos.filter(p=>p.vecinoId!==id);
+    render();
+  }catch(e){ alert('No se pudo borrar el vecino: ' + e.message); }
+}
+
+const MES_NOMBRES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+const MES_ABBR = ['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+
+// Desglose de lo pagado por un vecino en el mes contable actual: cuota social, seguridad, total y comentarios
+function desgloseVecinoMes(v, mesY){
+  const { total, lista } = totalesVecino(v.id, mesY);
+  const { cuota, seg } = desgloseConceptos(lista);
+  const notas = [...new Set(lista.map(p=>p.nota).filter(Boolean))].join('; ');
+  return { total, cuota, seg, notas };
+}
+
+function estadoVecino(v, cuota, seg){
+  const pagadoCuota = v.cuotaSocial<=0 || cuota>=v.cuotaSocial;
+  const pagadoSeg = v.seguridad<=0 || seg>=v.seguridad;
+  if(pagadoCuota && pagadoSeg) return 'Pagado';
+  if(cuota>0 || seg>0) return 'Atrasado';
+  return '';
+}
+
+function buildExcelRows(){
+  const rows = [['Plaza','Dirección/# Casa','Nombre','Celular','Patente','Estado','CDS','JJVV','Propietario/arrendatario','Comentarios adicionales']];
+  const moneyCells = []; // {row, col} 0-indexed, for currency formatting
+  const vecinosOrdenados = vecinos.slice().sort((a,b)=>{
+    const na = parseFloat(a.sector), nb = parseFloat(b.sector);
+    const aEsNum = !isNaN(na), bEsNum = !isNaN(nb);
+    if(aEsNum && bEsNum) return na - nb;
+    if(aEsNum) return -1;
+    if(bEsNum) return 1;
+    return (a.sector||'').localeCompare(b.sector||'');
+  });
+  vecinosOrdenados.forEach(v=>{
+    const { cuota, seg, notas } = desgloseVecinoMes(v, currentDate);
+    const estado = estadoVecino(v, cuota, seg);
+    const patentes = patentesDe(v.id).map(p=>p.patente);
+    if(patentes.length===0) patentes.push('');
+    patentes.forEach((patente, i)=>{
+      if(i===0){
+        const rIdx = rows.length;
+        rows.push([PLAZA_NOMBRE, v.sector||'', v.nombre, '', patente, estado, seg>0?Math.round(seg):'', cuota>0?Math.round(cuota):'', '', notas]);
+        moneyCells.push({row:rIdx, col:6}, {row:rIdx, col:7});
+      } else {
+        rows.push(['','','','',patente,'','','','','']);
+      }
+    });
+  });
+  return { rows, moneyCells };
+}
+
+function renderExportPreview(){
+  const { rows } = buildExcelRows();
+  const nVecinos = vecinos.length;
+  const nPatentes = vehiculos.length;
+  const { cuota, seg } = desgloseConceptos(pagosDelMes(currentDate));
+  document.getElementById('exportPreview').innerHTML = `
+    <div class="row"><div class="name">Vecinos incluidos</div><div class="num">${nVecinos}</div></div>
+    <div class="row"><div class="name">Patentes registradas</div><div class="num">${nPatentes}</div></div>
+    <div class="row"><div class="name">Total CDS (seguridad)</div><div class="num">${fmtMoney(seg)}</div></div>
+    <div class="row"><div class="name">Total JJVV (cuota social)</div><div class="num">${fmtMoney(cuota)}</div></div>
+  `;
+}
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  const { rows, moneyCells } = buildExcelRows();
+  const lastDataRow = rows.length; // 1-indexed sheet row of the last vecino/patente row
+  const totalsRowArr = new Array(10).fill('');
+  totalsRowArr[5] = `Total del Mes ${MES_NOMBRES[currentDate.getMonth()]}`;
+  rows.push(totalsRowArr);
+  const totalsRowIdx = rows.length; // 1-indexed sheet row of totals
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:8},{wch:16},{wch:20},{wch:14},{wch:11},{wch:12},{wch:12},{wch:10},{wch:22},{wch:40}];
+
+  const money = '"$"#,##0';
+  moneyCells.forEach(({row,col})=>{
+    const addr = XLSX.utils.encode_cell({r:row, c:col});
+    if(ws[addr]) ws[addr].z = money;
+  });
+  const gCol = XLSX.utils.encode_col(6), hCol = XLSX.utils.encode_col(7);
+  let sumG = 0, sumH = 0;
+  rows.slice(1, lastDataRow).forEach(r=>{
+    if(typeof r[6]==='number') sumG += r[6];
+    if(typeof r[7]==='number') sumH += r[7];
+  });
+  ws[gCol+totalsRowIdx] = { t:'n', f:`SUM(${gCol}2:${gCol}${lastDataRow})`, v: sumG, z: money };
+  ws[hCol+totalsRowIdx] = { t:'n', f:`SUM(${hCol}2:${hCol}${lastDataRow})`, v: sumH, z: money };
+
+  const wb = XLSX.utils.book_new();
+  const mesIdx = currentDate.getMonth();
+  const sheetName = MES_NOMBRES[mesIdx] + currentDate.getFullYear();
+  XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+  const yyyy = currentDate.getFullYear(), mm = String(mesIdx+1).padStart(2,'0'), yy = String(yyyy).slice(-2);
+  const filename = `${yyyy}${mm}_PAGOS_CUOTA_SOCIAL_${MES_ABBR[mesIdx]}_${yy}.xlsx`;
+  XLSX.writeFile(wb, filename);
+});
+
+document.getElementById('pagoVecino').addEventListener('change', updateConceptHint);
+document.getElementById('pagoConcepto').addEventListener('change', updateConceptHint);
+
+document.getElementById('pagoForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const vid = document.getElementById('pagoVecino').value;
+  if(!vid){ alert('Agrega un vecino primero.'); return; }
+  const concepto = document.getElementById('pagoConcepto').value;
+  const monto = Number(document.getElementById('pagoMonto').value);
+  if(concepto==='otro' && (!monto || monto<=0)){ alert('Ingresa un monto para "Otro".'); return; }
+  const payload = {
+    vecino_id: vid,
+    fecha: document.getElementById('pagoFecha').value,
+    monto: monto,
+    concepto: concepto,
+    metodo: document.getElementById('pagoMetodo').value,
+    nota: document.getElementById('pagoNota').value
+  };
+  try{
+    const { data, error } = await sb.from('pagos').insert(payload).select().single();
+    if(error) throw error;
+    pagos.push({ id:data.id, vecinoId:data.vecino_id, fecha:data.fecha, monto:Number(data.monto), concepto:data.concepto, metodo:data.metodo, nota:data.nota });
+    document.getElementById('pagoMonto').value=''; document.getElementById('pagoNota').value='';
+    render();
+  }catch(err){ alert('No se pudo registrar el pago: ' + err.message); }
+});
+
+document.getElementById('vecinoForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const payload = {
+    nombre: document.getElementById('vNombre').value,
+    sector: document.getElementById('vSector').value,
+    cuota_social: Number(document.getElementById('vCuotaSocial').value)||0,
+    seguridad: Number(document.getElementById('vSeguridad').value)||0
+  };
+  try{
+    const { data, error } = await sb.from('vecinos').insert(payload).select().single();
+    if(error) throw error;
+    vecinos.push({ id:data.id, nombre:data.nombre, sector:data.sector, cuotaSocial:Number(data.cuota_social), seguridad:Number(data.seguridad) });
+    document.getElementById('vecinoForm').reset();
+    render();
+  }catch(err){ alert('No se pudo agregar el vecino: ' + err.message); }
+});
+
+document.getElementById('transFecha').value = new Date().toISOString().slice(0,10);
+document.getElementById('transferenciaForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const payload = {
+    tipo: document.getElementById('transTipo').value,
+    monto: Number(document.getElementById('transMonto').value),
+    fecha: document.getElementById('transFecha').value
+  };
+  try{
+    const { data, error } = await sb.from('transferencias').insert(payload).select().single();
+    if(error) throw error;
+    transferencias.push({ id:data.id, tipo:data.tipo, monto:Number(data.monto), fecha:data.fecha });
+    document.getElementById('transMonto').value = '';
+    document.getElementById('transFecha').value = new Date().toISOString().slice(0,10);
+    render();
+  }catch(err){ alert('No se pudo registrar la transferencia: ' + err.message); }
+});
+
+document.getElementById('configForm').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const raw = document.getElementById('diasCorte').value;
+  let dias = raw.split(',').map(s=>parseInt(s.trim())).filter(n=>!isNaN(n) && n>=1 && n<=31);
+  dias = [...new Set(dias)].sort((a,b)=>a-b);
+  if(dias.length===0){ alert('Ingresa al menos un día válido (1-31).'); return; }
+  try{
+    await sb.from('config').update({ dias_corte: dias }).eq('id', 1);
+    config.diasCorte = dias;
+    currentDate = mesYForDate(new Date());
+    render();
+  }catch(err){ alert('No se pudo guardar: ' + err.message); }
+});
+
+document.getElementById('marcarEnviado').addEventListener('click', marcarEnviadoRapido);
+
+document.getElementById('prevMonth').addEventListener('click', ()=>{ currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()-1, 1); render(); });
+document.getElementById('nextMonth').addEventListener('click', ()=>{ currentDate = new Date(currentDate.getFullYear(), currentDate.getMonth()+1, 1); render(); });
+
+document.querySelectorAll('nav.tabs button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    document.querySelectorAll('nav.tabs button').forEach(b=>b.classList.remove('active'));
+    document.querySelectorAll('section.panel').forEach(p=>p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('panel-'+btn.dataset.tab).classList.add('active');
+  });
+});
+
+boot();
+</script>
+</body>
+</html>
